@@ -49,6 +49,27 @@ That's it — no build step, no dependencies, no server.
 - Open **DevTools → Network** and use the tool — you'll see zero network requests.
 - Open the file in a text editor and search for `fetch` or `http` — you won't find them.
 
+## Contributing
+
+Contributions are very welcome — new tools, bug fixes, and improvements. But this project has a strict, non-negotiable design contract that exists for one reason: **the user's data must never be able to leave the page.** Any contribution must keep all of the following true:
+
+- **Fully client-side & offline.** Everything runs in the browser. The tool must work with no internet connection. No `fetch`, `XMLHttpRequest`, `WebSocket`, `navigator.sendBeacon`, or any other network call.
+- **No third-party code.** No external libraries, frameworks, CDNs, web fonts, icons, or analytics. All logic is hand-written and self-contained. This keeps the supply-chain attack surface at zero.
+- **Single file, no build step.** Everything stays in `index.html` (inline `<style>` and `<script>`). It must run by simply double-clicking the file — no bundler, transpiler, or package manager.
+- **No persistent storage.** No `localStorage`, `sessionStorage`, cookies, or IndexedDB. Closing the tab must discard everything.
+- **Safe rendering.** Any user input rendered as HTML (e.g. Markdown) must be escaped/sanitized first — no XSS, no `javascript:` URLs, no untrusted `innerHTML`.
+- **The CSP must keep holding.** The page ships with `Content-Security-Policy: ... connect-src 'none'`. Your change must not require loosening it.
+
+A quick self-check before opening a PR:
+
+- [ ] Works with Wi-Fi off
+- [ ] DevTools → Network shows zero requests while using the tool
+- [ ] No new external URLs, `<script src>`, `<link href>`, `@import`, or `fetch`/`XHR`
+- [ ] No `localStorage`/cookies introduced
+- [ ] Still a single, self-contained `index.html`
+
+If you have an idea that genuinely needs to break one of these rules (for example, optional authenticated internal sharing), please open an issue to discuss it first — it would be a deliberate, clearly-documented exception, not the default.
+
 ## License
 
 [MIT](LICENSE) © 2026 Anıl Ejder
