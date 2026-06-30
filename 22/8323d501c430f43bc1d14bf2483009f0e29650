@@ -1,0 +1,19 @@
+README.md
+  s_45280b7a5097ff::t_aaec5abf3838c4 52-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "228323d501c430f43bc1d14bf2483009f0e29650",
+  "prompts": {},
+  "sessions": {
+    "s_45280b7a5097ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "23f4cc8c-8d53-4a06-b974-157d3b6d9bab",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Anıl Ejder <anilejder@gmail.com>"
+    }
+  }
+}
