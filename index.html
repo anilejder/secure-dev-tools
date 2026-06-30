@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Tüm dış bağlantıları tarayıcı seviyesinde engelle: veri cihazdan çıkamaz -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src 'self'; base-uri 'none'; form-action 'none'; connect-src 'none'">
+<title>Geliştirici Araçları — Şirket İçi</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2027; --panel2:#222a33; --border:#2d3742;
+    --text:#e6edf3; --muted:#8b98a5; --accent:#3b82f6; --accent2:#2563eb;
+    --ok:#22c55e; --err:#ef4444; --warn:#f59e0b; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
+  header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  .badge{font-size:11px;color:var(--ok);border:1px solid var(--ok);border-radius:20px;padding:2px 10px;display:inline-flex;align-items:center;gap:5px}
+  .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .tabs{display:flex;gap:4px;margin-left:auto}
+  .tab{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500}
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  main{flex:1;overflow:hidden}
+  .view{display:none;height:100%;flex-direction:column}
+  .view.active{display:flex}
+  .toolbar{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
+  button.act{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px}
+  button.act:hover{background:var(--accent);border-color:var(--accent)}
+  button.act.primary{background:var(--accent2);border-color:var(--accent2)}
+  button.act.primary:hover{background:var(--accent)}
+  .status{font-size:13px;margin-left:auto;font-family:var(--mono)}
+  .status.ok{color:var(--ok)} .status.err{color:var(--err)}
+  /* Panel görünümü segment kontrolü (böl / sadece sol / sadece sağ) */
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+  .seg button{background:var(--panel2);border:none;border-left:1px solid var(--border);color:var(--muted);padding:6px 11px;cursor:pointer;font-size:15px;line-height:1}
+  .seg button:first-child{border-left:none}
+  .seg button:hover{color:var(--text)}
+  .seg button.active{background:var(--accent);color:#fff}
+  /* Tek-panel modları: gizlenen panel + ayraç display:none, görünen panel tam genişlik */
+  .split.only-in>.gutter,.split.only-in>.pane:last-child{display:none}
+  .split.only-in>.pane:first-child{flex:1 1 100%!important}
+  .split.only-out>.gutter,.split.only-out>.pane:first-child{display:none}
+  .split.only-out>.pane:last-child{flex:1 1 100%!important}
+  .split{flex:1;display:flex;overflow:hidden}
+  .pane{display:flex;flex-direction:column;overflow:hidden;flex:1 1 50%;min-width:120px}
+  .gutter{flex:0 0 6px;cursor:col-resize;background:var(--border);position:relative;transition:background .15s}
+  .gutter:hover,.gutter.dragging{background:var(--accent)}
+  .gutter::after{content:"";position:absolute;left:-4px;right:-4px;top:0;bottom:0}
+  .pane-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 16px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .drag-hint{text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);opacity:.8;display:inline-flex;align-items:center;gap:4px}
+  textarea{flex:1;width:100%;border:none;outline:none;resize:none;background:var(--panel);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.6;padding:16px;tab-size:2}
+  textarea.drag-over{outline:2px dashed var(--accent);outline-offset:-6px;background:rgba(59,130,246,.06)}
+  .output{flex:1;overflow:auto;padding:16px;background:var(--panel)}
+  pre.json-out{margin:0;font-family:var(--mono);font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+  .err-box{color:var(--err);font-family:var(--mono);font-size:13px;white-space:pre-wrap}
+  /* JSON renkleri */
+  .j-key{color:#7dd3fc}.j-str{color:#86efac}.j-num{color:#fca5a5}.j-bool{color:#c4b5fd}.j-null{color:var(--muted)}
+  /* JSON ağaç görünümü */
+  .json-out.tree-mode{white-space:normal;font-size:13px;line-height:1.7}
+  .jt-entry{position:relative}
+  .jt-children{margin-left:18px;border-left:1px solid var(--border);padding-left:6px}
+  .jt-head{cursor:default;white-space:nowrap}
+  .jt-entry.collapsible>.jt-head{cursor:pointer}
+  .jt-entry.collapsible>.jt-head:hover{background:rgba(59,130,246,.08);border-radius:4px}
+  .jt-tog{display:inline-block;width:16px;color:var(--accent);user-select:none;font-size:12px;text-align:center;font-weight:700}
+  .jt-entry.collapsed>.jt-children,.jt-entry.collapsed>.jt-foot{display:none}
+  .jt-entry:not(.collapsed)>.jt-summary{display:none}
+  .jt-summary{color:var(--muted);font-style:italic;margin-left:4px}
+  .jt-punct{color:var(--muted)}
+  .jt-foot{color:var(--muted)}
+  .jt-leaf .jt-tog{visibility:hidden}
+  /* Markdown çıktı stilleri */
+  .md-body{line-height:1.7;font-size:15px}
+  .md-body h1,.md-body h2,.md-body h3{border-bottom:1px solid var(--border);padding-bottom:6px;margin-top:24px}
+  .md-body h1{font-size:26px}.md-body h2{font-size:21px}.md-body h3{font-size:17px;border:none}
+  .md-body code{background:var(--panel2);padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:13px}
+  .md-body pre{background:var(--panel2);padding:14px;border-radius:8px;overflow:auto}
+  .md-body pre code{background:none;padding:0}
+  /* Kod bloğu: dil etiketi + sözdizimi renklendirme */
+  .md-body pre.codeblock{position:relative}
+  .md-body .code-lang{position:absolute;top:6px;right:10px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-family:var(--mono);opacity:.65;user-select:none}
+  .md-body pre code .hl-com{color:var(--muted);font-style:italic}
+  .md-body pre code .hl-str{color:#86efac}
+  .md-body pre code .hl-num{color:#fca5a5}
+  .md-body pre code .hl-kw{color:#c4b5fd}
+  .md-body pre code .hl-bool{color:#7dd3fc}
+  .md-body blockquote{border-left:3px solid var(--accent);margin:12px 0;padding:4px 16px;color:var(--muted)}
+  .md-body table{border-collapse:collapse;margin:12px 0}
+  .md-body th,.md-body td{border:1px solid var(--border);padding:6px 12px}
+  .md-body th{background:var(--panel2)}
+  .md-body a{color:var(--accent)}
+  .md-body img{max-width:100%}
+  .md-body ul,.md-body ol{padding-left:24px}
+  .md-body hr{border:none;border-top:1px solid var(--border);margin:20px 0}
+  footer{padding:8px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center}
+  /* Diff görünümü */
+  .opt{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer}
+  .diff-inputs{display:flex;flex:0 0 42%;overflow:hidden;border-bottom:1px solid var(--border)}
+  .diff-result{flex:1;overflow:auto;background:var(--panel);font-family:var(--mono);font-size:13px;line-height:1.55;padding:8px 0}
+  .dl{display:block;padding:0 10px 0 6px;white-space:pre-wrap;word-break:break-word}
+  .dl-add{background:rgba(34,197,94,.13);color:#86efac}
+  .dl-del{background:rgba(239,68,68,.13);color:#fca5a5}
+  .dl-eq{color:var(--muted)}
+  .dl-g{display:inline-block;width:16px;user-select:none;opacity:.7;text-align:center}
+  .diff-empty{color:var(--muted);padding:12px 16px}
+  /* Encode/Decode seçici */
+  .sel{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:7px;font-size:13px;cursor:pointer}
+  .sel:focus{outline:none;border-color:var(--accent)}
+  /* JSONPath sorgu kutusu */
+  .qinput{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:7px;font-family:var(--mono);font-size:13px;min-width:280px;flex:1;max-width:520px}
+  .qinput:focus{outline:none;border-color:var(--accent)}
+  /* Güvenlik / Hakkında */
+  .about-body{flex:1;overflow:auto;padding:28px 32px;max-width:980px;margin:0 auto}
+  .ab-title{font-size:24px;margin:0 0 8px}
+  .ab-lead{color:var(--text);font-size:15px;line-height:1.6;margin:0 0 22px;opacity:.9}
+  .ab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .ab-card{display:flex;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .ab-ic{font-size:22px;line-height:1.2}
+  .ab-h{font-weight:600;margin-bottom:4px}
+  .ab-d{color:var(--muted);font-size:13px;line-height:1.55}
+  .ab-card code,.ab-list code,.ab-foot code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px;color:#7dd3fc}
+  .ab-sub{font-size:17px;margin:28px 0 10px;border-bottom:1px solid var(--border);padding-bottom:6px}
+  .ab-list{line-height:1.8;color:var(--text);padding-left:22px;margin:0}
+  .ab-list li{margin-bottom:6px}
+  .ab-foot{margin-top:24px;padding:14px 16px;background:rgba(59,130,246,.08);border-left:3px solid var(--accent);border-radius:6px;color:var(--muted);font-size:13px;line-height:1.6}
+  /* Hassas veri uyarı bandı */
+  .warnbar{display:none;align-items:flex-start;gap:10px;padding:10px 20px;background:rgba(245,158,11,.12);border-bottom:1px solid var(--warn);color:#fde68a;font-size:13px;line-height:1.5}
+  .warnbar.show{display:flex}
+  .warnbar.high{background:rgba(239,68,68,.12);border-bottom-color:var(--err);color:#fecaca}
+  .warnbar .wb-icon{font-size:16px;line-height:1.4}
+  .warnbar .wb-body{flex:1}
+  .warnbar .wb-title{font-weight:600}
+  .warnbar .wb-tags{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px}
+  .warnbar .wb-tag{font-family:var(--mono);font-size:11px;background:rgba(0,0,0,.25);border:1px solid currentColor;border-radius:4px;padding:1px 7px}
+  .warnbar .wb-note{margin-top:5px;font-size:11px;opacity:.85}
+  .warnbar .wb-close{background:none;border:none;color:inherit;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;opacity:.7}
+  .warnbar .wb-close:hover{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛠️ Geliştirici Araçları</h1>
+  <span class="badge" title="Tüm işleme tarayıcınızda yapılır; veri hiçbir sunucuya gönderilmez">Veri cihazınızdan çıkmaz</span>
+  <div class="tabs">
+    <button class="tab active" data-view="json">JSON Formatter</button>
+    <button class="tab" data-view="md">Markdown Viewer</button>
+    <button class="tab" data-view="diff">Diff / Karşılaştır</button>
+    <button class="tab" data-view="enc">Encode / Decode</button>
+    <button class="tab" data-view="jp">JSONPath</button>
+    <button class="tab" data-view="about">🔒 Güvenlik</button>
+  </div>
+</header>
+
+<main>
+  <!-- JSON -->
+  <section class="view active" id="view-json">
+    <div class="toolbar">
+      <button class="act primary" onclick="jsonTree()">Ağaç Görünümü</button>
+      <button class="act" onclick="jsonFormat()">Biçimlendir</button>
+      <button class="act" onclick="jsonMinify()">Küçült</button>
+      <button class="act" onclick="jsonValidate()">Doğrula</button>
+      <button class="act" onclick="treeAll(true)">Tümünü Aç</button>
+      <button class="act" onclick="treeAll(false)">Tümünü Kapat</button>
+      <button class="act" onclick="jsonClear()">Temizle</button>
+      <button class="act" onclick="copyOut('json')">Çıktıyı Kopyala</button>
+      <span class="status" id="json-status"></span>
+      <div class="seg" role="group" aria-label="Panel görünümü">
+        <button type="button" class="active" onclick="setSplit(this,'both')" title="Her iki panel">◫</button>
+        <button type="button" onclick="setSplit(this,'in')" title="Sadece sol panel (girdi)">◧</button>
+        <button type="button" onclick="setSplit(this,'out')" title="Sadece sağ panel (çıktı)">◨</button>
+      </div>
+    </div>
+    <div class="warnbar" id="json-warn"></div>
+    <div class="split">
+      <div class="pane">
+        <div class="pane-label">Girdi <span class="drag-hint">⤓ dosya sürükleyip bırakabilirsiniz</span></div>
+        <textarea id="json-in" placeholder='Buraya JSON yapıştırın ya da bir dosya sürükleyip bırakın...&#10;{"ornek": true, "sayi": 42}' spellcheck="false"></textarea>
+      </div>
+      <div class="gutter"></div>
+      <div class="pane">
+        <div class="pane-label">Çıktı</div>
+        <div class="output"><pre class="json-out" id="json-out"></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Markdown -->
+  <section class="view" id="view-md">
+    <div class="toolbar">
+      <button class="act" onclick="mdClear()">Temizle</button>
+      <button class="act" onclick="mdSample()">Örnek</button>
+      <label class="opt"><input type="checkbox" id="md-sync" checked> Senkron kaydırma</label>
+      <span class="status ok">Canlı önizleme</span>
+      <div class="seg" role="group" aria-label="Panel görünümü">
+        <button type="button" class="active" onclick="setSplit(this,'both')" title="Her iki panel">◫</button>
+        <button type="button" onclick="setSplit(this,'in')" title="Sadece sol panel (Markdown)">◧</button>
+        <button type="button" onclick="setSplit(this,'out')" title="Sadece sağ panel (önizleme)">◨</button>
+      </div>
+    </div>
+    <div class="warnbar" id="md-warn"></div>
+    <div class="split">
+      <div class="pane">
+        <div class="pane-label">Markdown <span class="drag-hint">⤓ dosya sürükleyip bırakabilirsiniz</span></div>
+        <textarea id="md-in" placeholder="# Başlık&#10;&#10;Buraya **markdown** yazın, yapıştırın ya da bir .md dosyası sürükleyip bırakın..." spellcheck="false"></textarea>
+      </div>
+      <div class="gutter"></div>
+      <div class="pane">
+        <div class="pane-label">Önizleme</div>
+        <div class="output md-body" id="md-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Diff -->
+  <section class="view" id="view-diff">
+    <div class="toolbar">
+      <button class="act primary" onclick="runDiff()">Karşılaştır</button>
+      <label class="opt"><input type="checkbox" id="diff-json" onchange="runDiff()"> JSON olarak biçimlendir</label>
+      <button class="act" onclick="diffSwap()">A ↔ B</button>
+      <button class="act" onclick="diffSample()">Örnek</button>
+      <button class="act" onclick="diffClear()">Temizle</button>
+      <span class="status" id="diff-status"></span>
+    </div>
+    <div class="warnbar" id="diff-warn"></div>
+    <div class="diff-inputs">
+      <div class="pane">
+        <div class="pane-label">A (eski) <span class="drag-hint">⤓ dosya bırakılabilir</span></div>
+        <textarea id="diff-a" placeholder="İlk metni / JSON'u yapıştırın ya da dosya sürükleyip bırakın..." spellcheck="false"></textarea>
+      </div>
+      <div class="gutter"></div>
+      <div class="pane">
+        <div class="pane-label">B (yeni) <span class="drag-hint">⤓ dosya bırakılabilir</span></div>
+        <textarea id="diff-b" placeholder="İkinci metni / JSON'u yapıştırın ya da dosya sürükleyip bırakın..." spellcheck="false"></textarea>
+      </div>
+    </div>
+    <div class="pane-label">Fark</div>
+    <div class="diff-result" id="diff-out"></div>
+  </section>
+
+  <!-- Encode / Decode -->
+  <section class="view" id="view-enc">
+    <div class="toolbar">
+      <select id="enc-type" class="sel" onchange="encTypeChange()">
+        <option value="base64">Base64</option>
+        <option value="base64url">Base64 (URL-safe)</option>
+        <option value="url">URL component</option>
+        <option value="jwt">JWT (çöz)</option>
+      </select>
+      <button class="act primary" id="enc-encode-btn" onclick="encRun('encode')">Kodla</button>
+      <button class="act" id="enc-decode-btn" onclick="encRun('decode')">Çöz</button>
+      <button class="act" onclick="encSwap()">Çıktıyı girdiye taşı</button>
+      <button class="act" onclick="encClear()">Temizle</button>
+      <button class="act" onclick="copyOut('enc')">Çıktıyı Kopyala</button>
+      <span class="status" id="enc-status"></span>
+      <div class="seg" role="group" aria-label="Panel görünümü">
+        <button type="button" class="active" onclick="setSplit(this,'both')" title="Her iki panel">◫</button>
+        <button type="button" onclick="setSplit(this,'in')" title="Sadece sol panel (girdi)">◧</button>
+        <button type="button" onclick="setSplit(this,'out')" title="Sadece sağ panel (çıktı)">◨</button>
+      </div>
+    </div>
+    <div class="warnbar" id="enc-warn"></div>
+    <div class="split">
+      <div class="pane">
+        <div class="pane-label">Girdi <span class="drag-hint">⤓ dosya sürükleyip bırakabilirsiniz</span></div>
+        <textarea id="enc-in" placeholder="Metni / token'ı yapıştırın ya da bir dosya sürükleyip bırakın..." spellcheck="false"></textarea>
+      </div>
+      <div class="gutter"></div>
+      <div class="pane">
+        <div class="pane-label">Çıktı</div>
+        <div class="output"><pre class="json-out" id="enc-out"></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- JSONPath -->
+  <section class="view" id="view-jp">
+    <div class="toolbar">
+      <input id="jp-query" class="qinput" placeholder="$.store.book[*].author" spellcheck="false" value="$">
+      <button class="act primary" onclick="runJp()">Sorgula</button>
+      <button class="act" onclick="jpSample()">Örnek</button>
+      <button class="act" onclick="jpClear()">Temizle</button>
+      <button class="act" onclick="copyOut('jp')">Çıktıyı Kopyala</button>
+      <span class="status" id="jp-status"></span>
+      <div class="seg" role="group" aria-label="Panel görünümü">
+        <button type="button" class="active" onclick="setSplit(this,'both')" title="Her iki panel">◫</button>
+        <button type="button" onclick="setSplit(this,'in')" title="Sadece sol panel (JSON)">◧</button>
+        <button type="button" onclick="setSplit(this,'out')" title="Sadece sağ panel (sonuç)">◨</button>
+      </div>
+    </div>
+    <div class="warnbar" id="jp-warn"></div>
+    <div class="split">
+      <div class="pane">
+        <div class="pane-label">JSON <span class="drag-hint">⤓ dosya sürükleyip bırakabilirsiniz</span></div>
+        <textarea id="jp-in" placeholder='JSON yapıştırın ya da dosya bırakın, sonra üstteki kutuya sorgu yazın...' spellcheck="false"></textarea>
+      </div>
+      <div class="gutter"></div>
+      <div class="pane">
+        <div class="pane-label">Sonuç (eşleşen değerler)</div>
+        <div class="output"><pre class="json-out" id="jp-out"></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Güvenlik / Hakkında -->
+  <section class="view" id="view-about">
+    <div class="about-body">
+      <h2 class="ab-title">🔒 Güvenlik Güvenceleri</h2>
+      <p class="ab-lead">Bu araç, hassas verilerin online formatter/viewer sitelerine yapıştırılarak sızması sorununa karşı tasarlandı. Temel ilke: <b>veriniz bu sayfadan asla çıkmaz.</b></p>
+
+      <div class="ab-grid">
+        <div class="ab-card"><div class="ab-ic">🚫</div><div><div class="ab-h">Veri cihazınızdan çıkmaz</div><div class="ab-d">Tüm işleme (JSON, Markdown, Diff, Encode, JSONPath) tarayıcınızda yapılır. Hiçbir sunucuya — bizimkine bile — veri gönderilmez.</div></div></div>
+        <div class="ab-card"><div class="ab-ic">🗑️</div><div><div class="ab-h">Kayıt / geçmiş yok</div><div class="ab-d">Çerez, localStorage veya sunucu kaydı kullanılmaz. Sekmeyi kapattığınızda içerik tamamen yok olur.</div></div></div>
+        <div class="ab-card"><div class="ab-ic">✈️</div><div><div class="ab-h">Çevrimdışı çalışır</div><div class="ab-d">İnternet bağlantısı olmadan da tam çalışır. Bu, verinin dışarı gitmediğinin pratik kanıtıdır.</div></div></div>
+        <div class="ab-card"><div class="ab-ic">📦</div><div><div class="ab-h">Sıfır üçüncü-parti kod</div><div class="ab-d">Harici kütüphane, CDN, font veya analitik script yok. Tek bir HTML dosyası; tüm mantık kurum içinde yazıldı.</div></div></div>
+        <div class="ab-card"><div class="ab-ic">🔐</div><div><div class="ab-h">Tarayıcı seviyesinde kilit</div><div class="ab-d">Content-Security-Policy (<code>connect-src 'none'</code>) ile sayfa hiçbir adrese ağ bağlantısı açamaz — yanlışlıkla bile.</div></div></div>
+        <div class="ab-card"><div class="ab-ic">⚠️</div><div><div class="ab-h">Hassas veri uyarısı</div><div class="ab-d">Yapıştırdığınız içerikte API anahtarı, parola, JWT, PII gibi öğeler tespit edilirse yerel bir uyarı gösterilir.</div></div></div>
+      </div>
+
+      <h3 class="ab-sub">Kendiniz doğrulayın</h3>
+      <ol class="ab-list">
+        <li><b>Wi-Fi'yi kapatın</b> ve aracı kullanın — her şey çalışmaya devam eder. Veri dışarı gitmiyor demektir.</li>
+        <li>Tarayıcıda <b>F12 → Network</b> sekmesini açıp aracı kullanın — hiçbir ağ isteği görmezsiniz.</li>
+        <li>Dosyayı bir metin editöründe açıp <code>fetch</code> veya <code>http</code> arayın — kod içinde bulamazsınız.</li>
+      </ol>
+
+      <p class="ab-foot">Bu araç, kasıtlı olarak sunucusuzdur. Online JSON formatter sızıntılarında (örn. 2025 watchTowr araştırması) kök neden, verinin üçüncü taraf sunuculara gönderilmesiydi. Burada o kanal hiç açılmadığı için risk kökten ortadan kalkar.</p>
+    </div>
+  </section>
+</main>
+
+<footer>İstemci taraflı · Harici bağlantı yok · Çevrimdışı çalışır — içerik bu sayfadan asla çıkmaz</footer>
+
+<script>
+/* ====== Sekme geçişi ====== */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('view-'+t.dataset.view).classList.add('active');
+  };
+});
+
+/* ====== Panel görünümü: böl / sadece girdi (sol) / sadece çıktı (sağ) ======
+   Büyük tablo/JSON gibi içeriklerde tek panele tam ekran çalışma alanı verir. */
+function setSplit(btn,mode){
+  const view=btn.closest('.view');
+  const split=view&&view.querySelector('.split');
+  if(split){
+    split.classList.remove('only-in','only-out');
+    if(mode==='in')split.classList.add('only-in');
+    else if(mode==='out')split.classList.add('only-out');
+  }
+  for(const b of btn.parentElement.children)b.classList.remove('active');
+  btn.classList.add('active');
+}
+
+/* ====== Yardımcı: HTML kaçışı ====== */
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function setStatus(id,msg,ok){const el=document.getElementById(id);el.textContent=msg;el.className='status '+(ok?'ok':'err');}
+
+/* ====== JSON araçları ====== */
+let lastJson;
+let jsonMode='tree';  // 'tree' | 'format' | 'minify' — girdi değişince hangi görünümün yenileneceği
+function getJson(){
+  const raw=document.getElementById('json-in').value;
+  if(!raw.trim()){setStatus('json-status','Girdi boş',false);return {err:'boş'};}
+  try{lastJson=JSON.parse(raw);return {data:lastJson};}
+  catch(e){return {err:e.message};}
+}
+function leaveTree(){document.getElementById('json-out').classList.remove('tree-mode');}
+function jsonFormat(){
+  jsonMode='format';leaveTree();
+  const r=getJson();
+  if(r.err){document.getElementById('json-out').innerHTML='<span class="err-box">⛔ Geçersiz JSON: '+esc(r.err)+'</span>';setStatus('json-status','Geçersiz',false);return;}
+  document.getElementById('json-out').innerHTML=highlight(JSON.stringify(r.data,null,2));
+  setStatus('json-status','✓ Geçerli · biçimlendirildi',true);
+}
+function jsonMinify(){
+  jsonMode='minify';leaveTree();
+  const r=getJson();
+  if(r.err){document.getElementById('json-out').innerHTML='<span class="err-box">⛔ Geçersiz JSON: '+esc(r.err)+'</span>';setStatus('json-status','Geçersiz',false);return;}
+  document.getElementById('json-out').innerHTML=highlight(JSON.stringify(r.data));
+  setStatus('json-status','✓ Küçültüldü',true);
+}
+function jsonValidate(){
+  leaveTree();
+  const r=getJson();
+  if(r.err){document.getElementById('json-out').innerHTML='<span class="err-box">⛔ Geçersiz JSON\n\n'+esc(r.err)+'</span>';setStatus('json-status','Geçersiz',false);return;}
+  const n=countNodes(r.data);
+  document.getElementById('json-out').innerHTML='<span style="color:var(--ok)">✓ Geçerli JSON</span>\n\nTür: '+(Array.isArray(r.data)?'dizi':typeof r.data)+'\nDüğüm sayısı: '+n;
+  setStatus('json-status','✓ Geçerli',true);
+}
+function countNodes(o){let c=1;if(o&&typeof o==='object'){for(const k in o)c+=countNodes(o[k]);}return c;}
+function jsonClear(){jsonMode='tree';leaveTree();document.getElementById('json-in').value='';document.getElementById('json-out').innerHTML=emptyHint();renderWarn('json');setStatus('json-status','',true);}
+
+/* ====== JSON Ağaç Görünümü (aç/kapa) ====== */
+function spn(cls,txt){const s=document.createElement('span');s.className=cls;s.textContent=txt;return s;}
+function buildEntry(key,value,keyIsIndex){
+  const entry=document.createElement('div');entry.className='jt-entry';
+  const head=document.createElement('div');head.className='jt-head';
+  const tog=spn('jt-tog','');head.appendChild(tog);
+  if(key!==null){
+    if(keyIsIndex){head.appendChild(spn('jt-punct',key+': '));}
+    else{head.appendChild(spn('j-key',JSON.stringify(key)));head.appendChild(spn('jt-punct',': '));}
+  }
+  const isObj=value&&typeof value==='object';
+  if(isObj){
+    const isArr=Array.isArray(value);
+    const keys=isArr?value.map((_,i)=>i):Object.keys(value);
+    const open=isArr?'[':'{', close=isArr?']':'}';
+    head.appendChild(spn('jt-punct',open));
+    if(keys.length===0){head.appendChild(spn('jt-punct',close));entry.classList.add('jt-leaf');entry.appendChild(head);return entry;}
+    entry.classList.add('collapsible');
+    tog.textContent='▾';entry._tog=tog;
+    head.appendChild(spn('jt-summary','… '+close+'  '+keys.length+(isArr?' öğe':' alan')));
+    entry.appendChild(head);
+    const kids=document.createElement('div');kids.className='jt-children';
+    for(const k of keys){kids.appendChild(buildEntry(k,value[k],isArr));}
+    entry.appendChild(kids);
+    entry.appendChild(spn('jt-foot',close));
+    head.addEventListener('click',()=>{entry.classList.toggle('collapsed');tog.textContent=entry.classList.contains('collapsed')?'▸':'▾';});
+  }else{
+    entry.classList.add('jt-leaf');
+    let cls='j-num',txt=String(value);
+    if(value===null){cls='j-null';txt='null';}
+    else if(typeof value==='string'){cls='j-str';txt=JSON.stringify(value);}
+    else if(typeof value==='boolean'){cls='j-bool';txt=String(value);}
+    head.appendChild(spn(cls,txt));
+    entry.appendChild(head);
+  }
+  return entry;
+}
+function jsonTree(){
+  jsonMode='tree';
+  const out=document.getElementById('json-out');
+  if(!document.getElementById('json-in').value.trim()){leaveTree();out.innerHTML=emptyHint();setStatus('json-status','Girdi boş',false);return;}
+  const r=getJson();
+  if(r.err){leaveTree();out.innerHTML='<span class="err-box">⛔ Geçersiz JSON: '+esc(r.err)+'</span>';setStatus('json-status','Geçersiz',false);return;}
+  out.classList.add('tree-mode');
+  out.textContent='';
+  out.appendChild(buildEntry(null,r.data,false));
+  setStatus('json-status','✓ Ağaç görünümü · düğümlere tıklayarak aç/kapat',true);
+}
+function treeAll(expand){
+  const out=document.getElementById('json-out');
+  if(!out.classList.contains('tree-mode')){jsonTree();}            // ağaç yoksa önce kur
+  const nodes=document.querySelectorAll('#json-out .jt-entry.collapsible');
+  if(!nodes.length){setStatus('json-status','Önce geçerli JSON girin',false);return;}
+  nodes.forEach(e=>{
+    const tog=e._tog;
+    if(expand){e.classList.remove('collapsed');if(tog)tog.textContent='▾';}
+    else{e.classList.add('collapsed');if(tog)tog.textContent='▸';}
+  });
+  setStatus('json-status',expand?'✓ Tümü açıldı':'✓ Tümü kapatıldı',true);
+}
+
+/* JSON sözdizimi renklendirme (çıktı zaten JSON.stringify'dan, güvenli; yine de escape edilir) */
+function highlight(json){
+  json=esc(json);
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,function(m){
+    let cls='j-num';
+    if(/^"/.test(m)){cls=/:$/.test(m)?'j-key':'j-str';}
+    else if(/true|false/.test(m))cls='j-bool';
+    else if(/null/.test(m))cls='j-null';
+    return '<span class="'+cls+'">'+m+'</span>';
+  });
+}
+
+/* ====== Markdown araçları ====== */
+/* Güvenlik: girdinin TAMAMI önce escape edilir, sonra markdown dönüşümleri uygulanır.
+   Böylece kullanıcının yazdığı ham HTML/script asla çalışmaz (XSS koruması). */
+function mdRender(){
+  const src=document.getElementById('md-in').value;
+  document.getElementById('md-out').innerHTML=parseMarkdown(src);
+}
+/* ====== Kod bloğu sözdizimi renklendirme (hafif, dil-agnostik, sıfır bağımlılık) ======
+   Tek geçişli tokenizer: yorum, dizgi, sayı, anahtar kelime, boolean/null yakalar;
+   diğer tüm metni ve token içeriğini HTML'e karşı escape eder (XSS güvenli). */
+const HL_KEYWORDS=['abstract','and','as','async','await','break','case','catch','chan','class','const','continue','def','defer','del','delete','do','elif','else','enum','except','export','extends','final','finally','fn','for','from','func','function','global','go','if','impl','implements','import','in','instanceof','interface','is','lambda','let','map','match','mod','module','mut','namespace','new','nonlocal','not','or','package','pass','private','protected','pub','public','raise','return','select','self','static','struct','super','switch','then','this','throw','trait','try','type','typedef','typeof','union','use','var','virtual','void','where','while','with','yield'];
+const HL_RULES=[
+  ['hl-com', /\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/y],
+  ['hl-str', /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/y],
+  ['hl-bool',/\b(?:true|false|null|nil|none|undefined|nan|True|False|None)\b/y],
+  ['hl-kw',  new RegExp('\\b(?:'+HL_KEYWORDS.join('|')+')\\b','y')],
+  ['hl-num', /0[xX][\da-fA-F]+|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/y]
+];
+function highlightCode(code,lang){
+  let out='',i=0,n=code.length;
+  while(i<n){
+    // '#' satır yorumu: yalnızca satır başı/boşluk sonrası (CSS hex, private alan vb. yanlış eşleşmesin)
+    if(code[i]==='#'&&(i===0||/\s/.test(code[i-1]))){
+      let j=code.indexOf('\n',i);if(j<0)j=n;
+      out+='<span class="hl-com">'+esc(code.slice(i,j))+'</span>';i=j;continue;
+    }
+    let tok=null,cls=null;
+    for(const r of HL_RULES){r[1].lastIndex=i;const m=r[1].exec(code);if(m&&m.index===i&&m[0].length){tok=m[0];cls=r[0];break;}}
+    if(tok){out+='<span class="'+cls+'">'+esc(tok)+'</span>';i+=tok.length;}
+    else{out+=esc(code[i]);i++;}
+  }
+  return out;
+}
+function parseMarkdown(src){
+  const blocks=[];
+  // Kod blokları (fenced): HAM kaynaktan çıkar — böylece dil ipucunu algılayıp
+  // içeriği kendimiz güvenle escape ederek sözdizimi renklendirmesi uygulayabiliriz.
+  // Yer tutucu, sonraki markdown dönüşümlerinden ve escape'ten etkilenmez.
+  let s=src.replace(/```([^\n`]*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
+    lang=lang.trim().toLowerCase();
+    const tag=lang?'<div class="code-lang">'+esc(lang)+'</div>':'';
+    blocks.push('<pre class="codeblock">'+tag+'<code>'+highlightCode(code.replace(/\n$/,''),lang)+'</code></pre>');
+    return '\uE000B'+(blocks.length-1)+'\uE000';
+  });
+  s=esc(s);
+  // Satır içi kod
+  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // Başlıklar
+  s=s.replace(/^###### (.*)$/gm,'<h6>$1</h6>').replace(/^##### (.*)$/gm,'<h5>$1</h5>')
+     .replace(/^#### (.*)$/gm,'<h4>$1</h4>').replace(/^### (.*)$/gm,'<h3>$1</h3>')
+     .replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
+  // Yatay çizgi
+  s=s.replace(/^(---|\*\*\*)$/gm,'<hr>');
+  // Alıntı
+  s=s.replace(/^&gt; (.*)$/gm,'<blockquote>$1</blockquote>').replace(/<\/blockquote>\n<blockquote>/g,'\n');
+  // Tablolar
+  s=parseTables(s);
+  // Kalın / italik / üstü çizili
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_]+)__/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/_([^_]+)_/g,'<em>$1</em>');
+  s=s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+  // Görseller (yalnızca güvenli protokoller)
+  s=s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,(m,alt,url)=>safeUrl(url)?'<img alt="'+alt+'" src="'+url+'">':alt);
+  // Linkler (yalnızca güvenli protokoller; javascript: engellenir)
+  s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,(m,txt,url)=>safeUrl(url)?'<a href="'+url+'" target="_blank" rel="noopener noreferrer">'+txt+'</a>':txt);
+  // Listeler
+  s=parseLists(s);
+  // Paragraflar
+  s=s.split(/\n{2,}/).map(p=>{
+    p=p.trim();
+    if(!p)return '';
+    if(/^<(h\d|ul|ol|pre|blockquote|hr|table|\uE000)/.test(p)||p.startsWith('\uE000B'))return p;
+    return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
+  }).join('\n');
+  // Kod bloklarını geri koy
+  s=s.replace(/\uE000B(\d+)\uE000/g,(m,i)=>blocks[+i]);
+  return s;
+}
+function safeUrl(u){return /^(https?:|mailto:|#|\/|data:image\/)/i.test(u.trim());}
+function parseLists(s){
+  const lines=s.split('\n');let out=[],inUl=false,inOl=false;
+  const close=()=>{if(inUl){out.push('</ul>');inUl=false;}if(inOl){out.push('</ol>');inOl=false;}};
+  for(const ln of lines){
+    let m;
+    if((m=ln.match(/^\s*[-*+] (.*)$/))){if(inOl){out.push('</ol>');inOl=false;}if(!inUl){out.push('<ul>');inUl=true;}out.push('<li>'+m[1]+'</li>');}
+    else if((m=ln.match(/^\s*\d+\. (.*)$/))){if(inUl){out.push('</ul>');inUl=false;}if(!inOl){out.push('<ol>');inOl=true;}out.push('<li>'+m[1]+'</li>');}
+    else{close();out.push(ln);}
+  }
+  close();return out.join('\n');
+}
+function parseTables(s){
+  return s.replace(/(^\|.*\|\s*\n\|[\s:|-]+\|\s*\n(?:\|.*\|\s*\n?)*)/gm,block=>{
+    const rows=block.trim().split('\n');
+    const head=rows[0].split('|').slice(1,-1).map(c=>c.trim());
+    const body=rows.slice(2).map(r=>r.split('|').slice(1,-1).map(c=>c.trim()));
+    let h='<table><thead><tr>'+head.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>';
+    h+=body.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('');
+    return h+'</tbody></table>';
+  });
+}
+/* Sol (girdi) ve sağ (önizleme) panelleri oransal olarak birlikte kaydır.
+   Kilit bayrağı, programatik kaydırmanın tetiklediği echo olayının geri besleme
+   döngüsü oluşturmasını engeller. */
+let _mdSyncing=false;
+function mdSyncScroll(from,to){
+  if(!document.getElementById('md-sync').checked||_mdSyncing)return;
+  _mdSyncing=true;
+  const denom=from.scrollHeight-from.clientHeight;
+  const ratio=denom>0?from.scrollTop/denom:0;
+  to.scrollTop=ratio*(to.scrollHeight-to.clientHeight);
+  requestAnimationFrame(()=>{_mdSyncing=false;});
+}
+function mdClear(){document.getElementById('md-in').value='';mdRender();}
+function mdSample(){
+  document.getElementById('md-in').value='# Markdown Örneği\n\nBu bir **kalın**, *italik* ve ~~üstü çizili~~ metindir.\n\n## Liste\n\n- Madde bir\n- Madde iki\n  - Alt madde\n\n1. Birinci\n2. İkinci\n\n## Kod\n\nSatır içi `kod` ve blok:\n\n```\nfunction selam(){\n  return "merhaba";\n}\n```\n\n## Tablo\n\n| Araç | Durum |\n|------|-------|\n| JSON | ✓ |\n| Markdown | ✓ |\n\n> Alıntı: veri cihazınızdan çıkmaz.\n\n[Güvenli link](https://example.com)';
+  mdRender();
+}
+
+/* ====== Kopyala (pano API'si yereldir, ağ değildir) ====== */
+function copyOut(which){
+  let txt;
+  const out=document.getElementById('json-out');
+  if(which==='json'&&out.classList.contains('tree-mode')&&lastJson!==undefined){txt=JSON.stringify(lastJson,null,2);}
+  else{txt=document.getElementById(which+'-out').innerText;}
+  navigator.clipboard?.writeText(txt).then(()=>setStatus(which+'-status','✓ Kopyalandı',true)).catch(()=>{});
+}
+
+/* ====== JSONPath sorgu motoru (saf JS, tanımlı alt küme) ======
+   Destekler: $  .key  ['key']  [n] (negatif dahil)  [*]  .*  ..key (recursive)
+              [start:end:step] dilim  [?(@.alan OP değer)] ve [?(@.alan)] filtre (OP: == != < <= > >=) */
+function jpParse(path){
+  let i=0,segs=[];path=path.trim();
+  if(path[0]==='$')i=1;
+  while(i<path.length){
+    let rec=false;
+    if(path[i]==='.'&&path[i+1]==='.'){rec=true;i+=2;}
+    else if(path[i]==='.'){i++;}
+    if(i>=path.length){if(rec)throw new Error("'..' sonrası bir alan/öğe bekleniyor");break;}
+    if(path[i]==='['){
+      const j=path.indexOf(']',i);
+      if(j<0)throw new Error("Kapanmamış '['");
+      jpBracket(path.slice(i+1,j).trim(),rec,segs);i=j+1;
+    }else if(path[i]==='*'){segs.push({type:'wild',rec});i++;}
+    else{const m=/^[^.\[]+/.exec(path.slice(i));segs.push({type:'child',name:m[0],rec});i+=m[0].length;}
+  }
+  return segs;
+}
+function jpBracket(s,rec,segs){
+  if(s==='*'){segs.push({type:'wild',rec});return;}
+  if(s[0]==='?'){let e=s.slice(1).trim();if(e[0]==='('&&e[e.length-1]===')')e=e.slice(1,-1).trim();segs.push({type:'filter',expr:e,rec});return;}
+  if(/^-?\d*:-?\d*(:-?\d+)?$/.test(s)){const p=s.split(':');segs.push({type:'slice',start:p[0]===''?null:+p[0],end:p[1]===''?null:+p[1],step:p[2]?+p[2]:1,rec});return;}
+  if(/^'.*'$/.test(s)||/^".*"$/.test(s)){segs.push({type:'child',name:s.slice(1,-1),rec});return;}
+  if(/^-?\d+$/.test(s)){segs.push({type:'index',n:+s,rec});return;}
+  throw new Error("Anlaşılmayan köşeli parantez: ["+s+"]");
+}
+function jpDesc(node,out){out.push(node);if(node&&typeof node==='object'){if(Array.isArray(node))node.forEach(v=>jpDesc(v,out));else Object.values(node).forEach(v=>jpDesc(v,out));}return out;}
+function jpFilter(expr,item){
+  expr=expr.trim();
+  const m=/^@\.([\w$]+)\s*(==|!=|<=|>=|<|>)\s*(.+)$/.exec(expr);
+  if(m){
+    const cur=(item&&typeof item==='object')?item[m[1]]:undefined, op=m[2];let v=m[3].trim(),lit;
+    if(/^'.*'$/.test(v)||/^".*"$/.test(v))lit=v.slice(1,-1);
+    else if(v==='true')lit=true;else if(v==='false')lit=false;else if(v==='null')lit=null;else lit=Number(v);
+    switch(op){case'==':return cur==lit;case'!=':return cur!=lit;case'<':return cur<lit;case'<=':return cur<=lit;case'>':return cur>lit;case'>=':return cur>=lit;}
+  }
+  const m2=/^@\.([\w$]+)$/.exec(expr);
+  if(m2)return (item&&typeof item==='object')?item[m2[1]]!==undefined:false;
+  throw new Error('Desteklenmeyen filtre: '+expr);
+}
+function jpApply(nodes,seg){
+  let pool=nodes;
+  if(seg.rec){pool=[];nodes.forEach(n=>jpDesc(n,pool));}
+  const res=[];
+  for(const n of pool){
+    if(seg.type==='child'){
+      if(n&&typeof n==='object'&&!Array.isArray(n)&&Object.prototype.hasOwnProperty.call(n,seg.name))res.push(n[seg.name]);
+      else if(Array.isArray(n)&&/^\d+$/.test(seg.name)&&+seg.name<n.length)res.push(n[+seg.name]);
+    }else if(seg.type==='index'){
+      if(Array.isArray(n)){const idx=seg.n<0?n.length+seg.n:seg.n;if(idx>=0&&idx<n.length)res.push(n[idx]);}
+    }else if(seg.type==='wild'){
+      if(Array.isArray(n))res.push(...n);else if(n&&typeof n==='object')res.push(...Object.values(n));
+    }else if(seg.type==='slice'){
+      if(Array.isArray(n)){const len=n.length,st=seg.step||1;let a=seg.start==null?(st>0?0:len-1):(seg.start<0?len+seg.start:seg.start);let b=seg.end==null?(st>0?len:-1):(seg.end<0?len+seg.end:seg.end);for(let k=a;st>0?k<b:k>b;k+=st){if(k>=0&&k<len)res.push(n[k]);}}
+    }else if(seg.type==='filter'){
+      if(Array.isArray(n)){for(const it of n)if(jpFilter(seg.expr,it))res.push(it);}
+      else if(n&&typeof n==='object'){for(const v of Object.values(n))if(jpFilter(seg.expr,v))res.push(v);}
+    }
+  }
+  return res;
+}
+function jpQuery(data,path){
+  const segs=jpParse(path);
+  let nodes=[data];
+  for(const seg of segs)nodes=jpApply(nodes,seg);
+  return nodes;
+}
+function runJp(){
+  const raw=document.getElementById('jp-in').value;
+  const q=document.getElementById('jp-query').value;
+  const out=document.getElementById('jp-out');
+  if(!raw.trim()){out.innerHTML='<span style="color:var(--muted)">Sol tarafa JSON yapıştırın.</span>';setStatus('jp-status','',true);return;}
+  let data;
+  try{data=JSON.parse(raw);}catch(e){out.innerHTML='<span class="err-box">⛔ Geçersiz JSON: '+esc(e.message)+'</span>';setStatus('jp-status','Geçersiz JSON',false);return;}
+  if(!q.trim()){out.innerHTML='<span style="color:var(--muted)">Üstteki kutuya bir JSONPath sorgusu yazın (örn. $.store.book[*].author).</span>';setStatus('jp-status','',true);return;}
+  try{
+    const r=jpQuery(data,q);
+    out.innerHTML=highlight(JSON.stringify(r,null,2));
+    setStatus('jp-status','✓ '+r.length+' eşleşme',true);
+  }catch(e){out.innerHTML='<span class="err-box">⛔ Sorgu hatası: '+esc(e.message)+'</span>';setStatus('jp-status','Sorgu hatası',false);}
+}
+function jpClear(){document.getElementById('jp-in').value='';document.getElementById('jp-query').value='$';document.getElementById('jp-out').innerHTML='';renderWarn('jp');setStatus('jp-status','',true);}
+function jpSample(){
+  document.getElementById('jp-in').value=JSON.stringify({store:{book:[
+    {category:"referans",author:"Nigel Rees",title:"Sayings of the Century",price:8.95},
+    {category:"kurgu",author:"Evelyn Waugh",title:"Sword of Honour",price:12.99},
+    {category:"kurgu",author:"Herman Melville",title:"Moby Dick",isbn:"0-553-21311-3",price:8.99}
+  ],bicycle:{color:"kırmızı",price:19.95}}},null,2);
+  document.getElementById('jp-query').value='$..book[?(@.price < 10)].title';
+  runJp();renderWarn('jp');
+}
+
+/* ====== Encode / Decode (Base64, URL, JWT) ======
+   Tarayıcının yerleşik btoa/atob/TextEncoder/TextDecoder'ı; UTF-8 güvenli. */
+function b64Encode(str){const bytes=new TextEncoder().encode(str);let bin='';bytes.forEach(b=>bin+=String.fromCharCode(b));return btoa(bin);}
+function b64Decode(b64){const bin=atob(b64.replace(/\s+/g,''));const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));return new TextDecoder().decode(bytes);}
+function toUrlSafe(b64){return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function fromUrlSafe(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return s;}
+function decodeJwt(token){
+  const parts=token.split('.');
+  if(parts.length<2||parts.length>3)throw new Error('Geçerli bir JWT değil (nokta ile ayrılmış 2-3 bölüm bekleniyor).');
+  let header,payload;
+  try{header=JSON.parse(b64Decode(fromUrlSafe(parts[0])));}catch(e){throw new Error('Header çözülemedi (geçersiz Base64URL/JSON).');}
+  try{payload=JSON.parse(b64Decode(fromUrlSafe(parts[1])));}catch(e){throw new Error('Payload çözülemedi (geçersiz Base64URL/JSON).');}
+  let txt='// HEADER\n'+JSON.stringify(header,null,2)+'\n\n// PAYLOAD\n'+JSON.stringify(payload,null,2);
+  const human=[];
+  const fmt=s=>new Date(s*1000).toLocaleString();
+  if(payload.iat)human.push('iat (düzenlenme): '+fmt(payload.iat));
+  if(payload.nbf)human.push('nbf (geçerlilik başlangıcı): '+fmt(payload.nbf));
+  if(payload.exp){const d=new Date(payload.exp*1000);human.push('exp (bitiş): '+d.toLocaleString()+(d<new Date()?'  ⚠️ SÜRESİ DOLMUŞ':'  ✓ geçerli'));}
+  if(human.length)txt+='\n\n// ZAMANLAR\n'+human.join('\n');
+  txt+='\n\n// İMZA (doğrulanmadı — imza doğrulaması gizli anahtar gerektirir)\n'+(parts[2]||'(imza yok)');
+  return txt;
+}
+function encRun(dir){
+  const type=document.getElementById('enc-type').value;
+  const inp=document.getElementById('enc-in').value;
+  const out=document.getElementById('enc-out');
+  if(!inp.trim()){out.textContent='';setStatus('enc-status','Girdi boş',false);return;}
+  try{
+    let res;
+    if(type==='base64')      res=dir==='encode'?b64Encode(inp):b64Decode(inp.trim());
+    else if(type==='base64url')res=dir==='encode'?toUrlSafe(b64Encode(inp)):b64Decode(fromUrlSafe(inp.trim()));
+    else if(type==='url')    res=dir==='encode'?encodeURIComponent(inp):decodeURIComponent(inp.trim());
+    else if(type==='jwt')    res=decodeJwt(inp.trim());
+    out.textContent=res;
+    setStatus('enc-status','✓ '+(type==='jwt'?'JWT çözüldü':(dir==='encode'?'Kodlandı':'Çözüldü')),true);
+  }catch(e){
+    out.innerHTML='<span class="err-box">⛔ İşlem başarısız: '+esc(e.message)+'</span>';
+    setStatus('enc-status','Hata',false);
+  }
+}
+function encTypeChange(){
+  const jwt=document.getElementById('enc-type').value==='jwt';
+  document.getElementById('enc-encode-btn').style.display=jwt?'none':'';
+  document.getElementById('enc-decode-btn').textContent=jwt?'JWT Çöz':'Çöz';
+  document.getElementById('enc-out').textContent='';
+  setStatus('enc-status','',true);
+}
+function encSwap(){document.getElementById('enc-in').value=document.getElementById('enc-out').innerText;document.getElementById('enc-out').textContent='';renderWarn('enc');}
+function encClear(){document.getElementById('enc-in').value='';document.getElementById('enc-out').innerHTML='';renderWarn('enc');setStatus('enc-status','',true);}
+
+/* ====== Diff / Karşılaştırma (LCS tabanlı satır farkı) ====== */
+function diffLines(A,B){
+  const m=A.length,n=B.length;
+  // Çok büyük girdilerde O(m*n) belleği koru
+  if(m*n>4000000){return null;}
+  const dp=Array.from({length:m+1},()=>new Int32Array(n+1));
+  for(let i=m-1;i>=0;i--)for(let j=n-1;j>=0;j--){
+    dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  }
+  const res=[];let i=0,j=0;
+  while(i<m&&j<n){
+    if(A[i]===B[j]){res.push({t:'eq',v:A[i]});i++;j++;}
+    else if(dp[i+1][j]>=dp[i][j+1]){res.push({t:'del',v:A[i]});i++;}
+    else{res.push({t:'add',v:B[j]});j++;}
+  }
+  while(i<m)res.push({t:'del',v:A[i++]});
+  while(j<n)res.push({t:'add',v:B[j++]});
+  return res;
+}
+function normForDiff(text){
+  if(!document.getElementById('diff-json').checked)return {text,note:''};
+  try{return {text:JSON.stringify(JSON.parse(text),null,2),note:''};}
+  catch(e){return {text,note:' (JSON ayrıştırılamadı, ham karşılaştırıldı)'};}
+}
+function runDiff(){
+  const out=document.getElementById('diff-out');
+  let a=document.getElementById('diff-a').value, b=document.getElementById('diff-b').value;
+  if(!a&&!b){out.innerHTML='<div class="diff-empty">Karşılaştırmak için A ve B alanlarına içerik girin.</div>';setStatus('diff-status','',true);return;}
+  const na=normForDiff(a), nb=normForDiff(b);
+  const diff=diffLines(na.text.split('\n'), nb.text.split('\n'));
+  out.textContent='';
+  if(diff===null){out.innerHTML='<div class="diff-empty">Girdi çok büyük; lütfen daha küçük parçalarla karşılaştırın.</div>';setStatus('diff-status','Çok büyük',false);return;}
+  let add=0,del=0;
+  for(const d of diff){
+    const line=document.createElement('span');
+    line.className='dl '+(d.t==='add'?'dl-add':d.t==='del'?'dl-del':'dl-eq');
+    const g=document.createElement('span');g.className='dl-g';
+    g.textContent=d.t==='add'?'+':d.t==='del'?'−':' ';
+    line.appendChild(g);
+    line.appendChild(document.createTextNode(d.v===''?' ':d.v));
+    out.appendChild(line);
+    if(d.t==='add')add++;else if(d.t==='del')del++;
+  }
+  if(add===0&&del===0){setStatus('diff-status','✓ İçerikler aynı'+na.note+nb.note,true);}
+  else{setStatus('diff-status','+'+add+' eklendi · −'+del+' silindi'+na.note+nb.note,true);}
+}
+function diffSwap(){const a=document.getElementById('diff-a'),b=document.getElementById('diff-b');[a.value,b.value]=[b.value,a.value];runDiff();renderWarn('diff');}
+function diffClear(){document.getElementById('diff-a').value='';document.getElementById('diff-b').value='';document.getElementById('diff-out').innerHTML='';renderWarn('diff');setStatus('diff-status','',true);}
+function diffSample(){
+  document.getElementById('diff-json').checked=true;
+  document.getElementById('diff-a').value='{\n  "ad": "servis",\n  "versiyon": "1.0.0",\n  "port": 8080,\n  "ozellikler": ["a", "b"]\n}';
+  document.getElementById('diff-b').value='{\n  "ad": "servis",\n  "versiyon": "1.1.0",\n  "port": 9090,\n  "ozellikler": ["a", "b", "c"],\n  "yeni": true\n}';
+  runDiff();renderWarn('diff');
+}
+
+/* ====== Hassas veri (secret / PII) algılayıcı ======
+   Tamamen yerel çalışır; içerik hiçbir yere gönderilmez. Yalnızca farkındalık amaçlı uyarır. */
+const SECRET_RULES=[
+  {label:'AWS Access Key', sev:'high', re:/\bAKIA[0-9A-Z]{16}\b/},
+  {label:'Özel anahtar (private key)', sev:'high', re:/-----BEGIN(?:[ A-Z]*)PRIVATE KEY-----/},
+  {label:'JWT token', sev:'high', re:/\beyJ[A-Za-z0-9_=-]{8,}\.eyJ[A-Za-z0-9_=-]{8,}\.[A-Za-z0-9_=-]{8,}\b/},
+  {label:'GitHub token', sev:'high', re:/\b(?:gh[posru]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{22,})\b/},
+  {label:'Slack token', sev:'high', re:/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/},
+  {label:'Stripe anahtarı', sev:'high', re:/\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/},
+  {label:'Google API anahtarı', sev:'high', re:/\bAIza[0-9A-Za-z_-]{35}\b/},
+  {label:'Bağlantı dizgisi (kimlikli)', sev:'high', re:/\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis|amqp):\/\/[^\s:@/]+:[^\s:@/]+@/i},
+  {label:'Parola/secret alanı', sev:'med', re:/["']?(?:pass(?:word)?|passwd|pwd|secret|api[_-]?key|access[_-]?token|client[_-]?secret)["']?\s*[:=]\s*["']?(?!(?:x{3,}|\*{3,}|<|your[_-]|changeme|placeholder|null|true|false)\b)[^\s"',}{]{4,}/i},
+  {label:'Bearer token', sev:'med', re:/\bBearer\s+[A-Za-z0-9._-]{16,}\b/},
+  {label:'E-posta adresi (PII)', sev:'low', re:/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/}
+];
+function luhn(num){let s=0,alt=false;for(let i=num.length-1;i>=0;i--){let d=+num[i];if(alt){d*=2;if(d>9)d-=9;}s+=d;alt=!alt;}return s%10===0;}
+function scanSecrets(text){
+  if(!text||text.length<3)return [];
+  const found=new Map();
+  for(const r of SECRET_RULES){if(r.re.test(text))found.set(r.label,r.sev);}
+  // Kredi kartı (Luhn doğrulamalı, yanlış pozitifi azaltır)
+  const cc=text.match(/\b(?:\d[ -]?){13,16}\b/g);
+  if(cc&&cc.some(m=>{const d=m.replace(/[ -]/g,'');return d.length>=13&&d.length<=16&&luhn(d);}))found.set('Kredi kartı numarası',  'high');
+  return [...found.entries()].map(([label,sev])=>({label,sev}));
+}
+const _warnState={};
+function renderWarn(view){
+  const bar=document.getElementById(view+'-warn');
+  const text=view==='diff'
+    ? document.getElementById('diff-a').value+'\n'+document.getElementById('diff-b').value
+    : document.getElementById(view+'-in').value;
+  const findings=scanSecrets(text);
+  const sig=findings.map(f=>f.label).sort().join('|');
+  if(findings.length===0){bar.classList.remove('show');_warnState[view]='';return;}
+  if(_warnState[view]==='dismissed:'+sig){return;} // bu bulgu kümesi için kapatıldı
+  const high=findings.some(f=>f.sev==='high');
+  bar.className='warnbar show'+(high?' high':'');
+  bar.innerHTML=
+    '<span class="wb-icon">'+(high?'⛔':'⚠️')+'</span>'+
+    '<div class="wb-body">'+
+      '<div class="wb-title">Olası hassas veri tespit edildi</div>'+
+      '<div class="wb-tags">'+findings.map(f=>'<span class="wb-tag">'+f.label+'</span>').join('')+'</div>'+
+      '<div class="wb-note">İçerik cihazınızdan çıkmadı — bu yalnızca bir hatırlatmadır. Gerçek secret/PII ise paylaşmadan önce temizleyin.</div>'+
+    '</div>'+
+    '<button class="wb-close" title="Kapat" onclick="dismissWarn(\''+view+'\',\''+sig.replace(/'/g,"")+'\')">×</button>';
+}
+function dismissWarn(view,sig){_warnState[view]='dismissed:'+sig;document.getElementById(view+'-warn').classList.remove('show');}
+
+/* ====== Panel boyutlandırma (sürüklenebilir ayraç) ====== */
+document.querySelectorAll('.gutter').forEach(gutter=>{
+  const split=gutter.parentElement;
+  const left=gutter.previousElementSibling;
+  const right=gutter.nextElementSibling;
+  let dragging=false;
+  const start=e=>{dragging=true;gutter.classList.add('dragging');document.body.style.cursor='col-resize';document.body.style.userSelect='none';e.preventDefault();};
+  const move=e=>{
+    if(!dragging)return;
+    const x=(e.touches?e.touches[0].clientX:e.clientX);
+    const r=split.getBoundingClientRect();
+    let pct=((x-r.left)/r.width)*100;
+    pct=Math.max(15,Math.min(85,pct));
+    left.style.flex='0 0 '+pct+'%';
+    right.style.flex='1 1 '+(100-pct)+'%';
+  };
+  const end=()=>{dragging=false;gutter.classList.remove('dragging');document.body.style.cursor='';document.body.style.userSelect='';};
+  gutter.addEventListener('mousedown',start);
+  gutter.addEventListener('touchstart',start,{passive:false});
+  window.addEventListener('mousemove',move);
+  window.addEventListener('touchmove',move,{passive:false});
+  window.addEventListener('mouseup',end);
+  window.addEventListener('touchend',end);
+  gutter.addEventListener('dblclick',()=>{left.style.flex='1 1 50%';right.style.flex='1 1 50%';});
+});
+
+/* Girdi değişince son seçilen görünümü canlı yenile (debounce'lu) */
+function refreshJson(){
+  const raw=document.getElementById('json-in').value;
+  if(!raw.trim()){leaveTree();document.getElementById('json-out').innerHTML=emptyHint();setStatus('json-status','',true);return;}
+  if(jsonMode==='format')jsonFormat();
+  else if(jsonMode==='minify')jsonMinify();
+  else jsonTree();
+}
+let _jsonTimer;
+function emptyHint(){return '<span style="color:var(--muted)">JSON yapıştırın — çıktı burada otomatik olarak <b>ağaç görünümü</b> olarak gösterilir.<br>Düğümlerin başındaki ▾ oklarına tıklayarak dalları açıp kapatabilirsiniz.</span>';}
+
+/* ====== Sürükle-bırak ile dosya yükleme (yerel; FileReader, ağ yok) ====== */
+function enableDrop(id){
+  const ta=document.getElementById(id);
+  ta.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();ta.classList.add('drag-over');});
+  ta.addEventListener('dragleave',e=>{e.preventDefault();ta.classList.remove('drag-over');});
+  ta.addEventListener('drop',e=>{
+    e.preventDefault();e.stopPropagation();ta.classList.remove('drag-over');
+    const f=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(!f)return;
+    if(f.size>15*1024*1024){alert('Dosya çok büyük (>15 MB). Lütfen daha küçük bir dosya deneyin.');return;}
+    const r=new FileReader();
+    r.onload=()=>{ta.value=r.result;ta.dispatchEvent(new Event('input',{bubbles:true}));};
+    r.readAsText(f);
+  });
+}
+['json-in','md-in','diff-a','diff-b','enc-in','jp-in'].forEach(enableDrop);
+/* Sayfa dışına yanlışlıkla bırakınca tarayıcının dosyaya gitmesini engelle */
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>e.preventDefault());
+
+/* Canlı render + hassas veri tarama bağlama */
+document.getElementById('md-in').addEventListener('input',()=>{mdRender();renderWarn('md');});
+(function(){
+  const mdIn=document.getElementById('md-in'), mdOut=document.getElementById('md-out');
+  mdIn.addEventListener('scroll',()=>mdSyncScroll(mdIn,mdOut));
+  mdOut.addEventListener('scroll',()=>mdSyncScroll(mdOut,mdIn));
+})();
+document.getElementById('json-in').addEventListener('input',()=>{
+  renderWarn('json');
+  clearTimeout(_jsonTimer);
+  _jsonTimer=setTimeout(refreshJson,250);
+});
+document.getElementById('json-out').innerHTML=emptyHint();
+
+/* Diff girdileri: canlı karşılaştırma (debounce'lu) + hassas veri tarama */
+let _diffTimer;
+['diff-a','diff-b'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  renderWarn('diff');
+  clearTimeout(_diffTimer);
+  _diffTimer=setTimeout(runDiff,300);
+}));
+
+/* Encode/Decode girdisi: hassas veri tarama */
+document.getElementById('enc-in').addEventListener('input',()=>renderWarn('enc'));
+encTypeChange();
+
+/* JSONPath: canlı sorgu (debounce'lu) + hassas veri tarama */
+let _jpTimer;
+document.getElementById('jp-in').addEventListener('input',()=>{renderWarn('jp');clearTimeout(_jpTimer);_jpTimer=setTimeout(runJp,300);});
+document.getElementById('jp-query').addEventListener('input',()=>{clearTimeout(_jpTimer);_jpTimer=setTimeout(runJp,200);});
+document.getElementById('json-in').addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();const t=e.target,s=t.selectionStart;t.value=t.value.slice(0,s)+'  '+t.value.slice(t.selectionEnd);t.selectionStart=t.selectionEnd=s+2;}});
+mdSample();
+</script>
+</body>
+</html>
