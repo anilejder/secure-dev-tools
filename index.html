@@ -514,8 +514,12 @@ function parseMarkdown(src){
     return '\uE000B'+(blocks.length-1)+'\uE000';
   });
   s=esc(s);
-  // Satır içi kod
-  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // Satır içi kod: yer tutucuya al ki sonraki dönüşümler (italik vb.) içeriğe sızmasın.
+  // (fenced bloklarla aynı `blocks` dizisini kullanır; C = inline-code işareti)
+  s=s.replace(/`([^`]+)`/g,(m,code)=>{
+    blocks.push('<code>'+code+'</code>');
+    return '\uE000C'+(blocks.length-1)+'\uE000';
+  });
   // Başlıklar
   s=s.replace(/^###### (.*)$/gm,'<h6>$1</h6>').replace(/^##### (.*)$/gm,'<h5>$1</h5>')
      .replace(/^#### (.*)$/gm,'<h4>$1</h4>').replace(/^### (.*)$/gm,'<h3>$1</h3>')
@@ -527,8 +531,10 @@ function parseMarkdown(src){
   // Tablolar
   s=parseTables(s);
   // Kalın / italik / üstü çizili
-  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_]+)__/g,'<strong>$1</strong>');
-  s=s.replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/_([^_]+)_/g,'<em>$1</em>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(^|[^A-Za-z0-9_])__([^_]+?)__(?![A-Za-z0-9_])/g,'$1<strong>$2</strong>');
+  // İtalik: * kelime-içi de olabilir (CommonMark); _ ise yalnızca kelime sınırında
+  // → böylece snake_case (mstv_package_id) alt çizgileri italik sanılmaz.
+  s=s.replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/(^|[^A-Za-z0-9_])_([^_]+?)_(?![A-Za-z0-9_])/g,'$1<em>$2</em>');
   s=s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
   // Görseller (yalnızca güvenli protokoller)
   s=s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,(m,alt,url)=>safeUrl(url)?'<img alt="'+alt+'" src="'+url+'">':alt);
@@ -544,7 +550,7 @@ function parseMarkdown(src){
     return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
   }).join('\n');
   // Kod bloklarını geri koy
-  s=s.replace(/\uE000B(\d+)\uE000/g,(m,i)=>blocks[+i]);
+  s=s.replace(/\uE000[BC](\d+)\uE000/g,(m,i)=>blocks[+i]);
   return s;
 }
 function safeUrl(u){return /^(https?:|mailto:|#|\/|data:image\/)/i.test(u.trim());}
