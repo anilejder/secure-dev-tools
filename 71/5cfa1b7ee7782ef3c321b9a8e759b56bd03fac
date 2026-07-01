@@ -1,0 +1,22 @@
+index.html
+  s_11cd79d879d618::t_8eb70f3f45299f 521
+  s_11cd79d879d618::t_93d8eb540068a4 534-537
+  s_11cd79d879d618::t_6362ba6b10ee52 553
+  s_11cd79d879d618::t_e684056d451f12 517-520,522
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "715cfa1b7ee7782ef3c321b9a8e759b56bd03fac",
+  "prompts": {},
+  "sessions": {
+    "s_11cd79d879d618": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4dbffc2-8ca4-4263-a122-1114a1f62bc2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Anıl Ejder <anilejder@gmail.com>"
+    }
+  }
+}
